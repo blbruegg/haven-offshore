@@ -1,21 +1,21 @@
 // Copyright (c) 2016-2017, The Monero Project
-// 
+//
 // All rights reserved.
-// 
+//
 // Redistribution and use in source and binary forms, with or without modification, are
 // permitted provided that the following conditions are met:
-// 
+//
 // 1. Redistributions of source code must retain the above copyright notice, this list of
 //    conditions and the following disclaimer.
-// 
+//
 // 2. Redistributions in binary form must reproduce the above copyright notice, this list
 //    of conditions and the following disclaimer in the documentation and/or other
 //    materials provided with the distribution.
-// 
+//
 // 3. Neither the name of the copyright holder nor the names of its contributors may be
 //    used to endorse or promote products derived from this software without specific
 //    prior written permission.
-// 
+//
 // THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND ANY
 // EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF
 // MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL
@@ -249,6 +249,7 @@ void toJsonValue(rapidjson::Document& doc, const cryptonote::block& b, rapidjson
 
   INSERT_INTO_JSON_OBJECT(val, doc, major_version, b.major_version);
   INSERT_INTO_JSON_OBJECT(val, doc, minor_version, b.minor_version);
+  INSERT_INTO_JSON_OBJECT(val, doc, usd_rate, b.usd_rate);
   INSERT_INTO_JSON_OBJECT(val, doc, timestamp, b.timestamp);
   INSERT_INTO_JSON_OBJECT(val, doc, prev_id, b.prev_id);
   INSERT_INTO_JSON_OBJECT(val, doc, nonce, b.nonce);
@@ -266,6 +267,7 @@ void fromJsonValue(const rapidjson::Value& val, cryptonote::block& b)
 
   GET_FROM_JSON_OBJECT(val, b.major_version, major_version);
   GET_FROM_JSON_OBJECT(val, b.minor_version, minor_version);
+  GET_FROM_JSON_OBJECT(val, b.usd_rate, usd_rate);
   GET_FROM_JSON_OBJECT(val, b.timestamp, timestamp);
   GET_FROM_JSON_OBJECT(val, b.prev_id, prev_id);
   GET_FROM_JSON_OBJECT(val, b.nonce, nonce);
@@ -296,6 +298,16 @@ void toJsonValue(rapidjson::Document& doc, const cryptonote::txin_v& txin, rapid
   {
     val.AddMember("type", "txin_to_key", doc.GetAllocator());
     INSERT_INTO_JSON_OBJECT(val, doc, value, boost::get<cryptonote::txin_to_key>(txin));
+  }
+  else if (txin.type() == typeid(cryptonote::txin_offshore))
+  {
+    val.AddMember("type", "txin_offshore", doc.GetAllocator());
+    INSERT_INTO_JSON_OBJECT(val, doc, value, boost::get<cryptonote::txin_offshore>(txin));
+  }
+  else if (txin.type() == typeid(cryptonote::txin_onshore))
+  {
+    val.AddMember("type", "txin_onshore", doc.GetAllocator());
+    INSERT_INTO_JSON_OBJECT(val, doc, value, boost::get<cryptonote::txin_onshore>(txin));
   }
 }
 
@@ -330,6 +342,18 @@ void fromJsonValue(const rapidjson::Value& val, cryptonote::txin_v& txin)
   else if (val["type"] == "txin_to_key")
   {
     cryptonote::txin_to_key tmpVal;
+    fromJsonValue(val["value"], tmpVal);
+    txin = tmpVal;
+  }
+  else if (val["type"] == "txin_offshore")
+  {
+    cryptonote::txin_offshore tmpVal;
+    fromJsonValue(val["value"], tmpVal);
+    txin = tmpVal;
+  }
+  else if (val["type"] == "txin_onshore")
+  {
+    cryptonote::txin_onshore tmpVal;
     fromJsonValue(val["value"], tmpVal);
     txin = tmpVal;
   }
@@ -421,6 +445,50 @@ void fromJsonValue(const rapidjson::Value& val, cryptonote::txin_to_key& txin)
   GET_FROM_JSON_OBJECT(val, txin.k_image, k_image);
 }
 
+void toJsonValue(rapidjson::Document& doc, const cryptonote::txin_offshore& txin, rapidjson::Value& val)
+{
+  val.SetObject();
+
+  INSERT_INTO_JSON_OBJECT(val, doc, amount, txin.amount);
+  INSERT_INTO_JSON_OBJECT(val, doc, key_offsets, txin.key_offsets);
+  INSERT_INTO_JSON_OBJECT(val, doc, k_image, txin.k_image);
+}
+
+
+void fromJsonValue(const rapidjson::Value& val, cryptonote::txin_offshore& txin)
+{
+  if (!val.IsObject())
+  {
+    throw WRONG_TYPE("json object");
+  }
+
+  GET_FROM_JSON_OBJECT(val, txin.amount, amount);
+  GET_FROM_JSON_OBJECT(val, txin.key_offsets, key_offsets);
+  GET_FROM_JSON_OBJECT(val, txin.k_image, k_image);
+}
+
+
+void toJsonValue(rapidjson::Document& doc, const cryptonote::txin_onshore& txin, rapidjson::Value& val)
+{
+  val.SetObject();
+
+  INSERT_INTO_JSON_OBJECT(val, doc, amount, txin.amount);
+  INSERT_INTO_JSON_OBJECT(val, doc, key_offsets, txin.key_offsets);
+  INSERT_INTO_JSON_OBJECT(val, doc, k_image, txin.k_image);
+}
+
+
+void fromJsonValue(const rapidjson::Value& val, cryptonote::txin_onshore& txin)
+{
+  if (!val.IsObject())
+  {
+    throw WRONG_TYPE("json object");
+  }
+
+  GET_FROM_JSON_OBJECT(val, txin.amount, amount);
+  GET_FROM_JSON_OBJECT(val, txin.key_offsets, key_offsets);
+  GET_FROM_JSON_OBJECT(val, txin.k_image, k_image);
+}
 void toJsonValue(rapidjson::Document& doc, const cryptonote::txout_target_v& txout, rapidjson::Value& val)
 {
   val.SetObject();
@@ -439,6 +507,11 @@ void toJsonValue(rapidjson::Document& doc, const cryptonote::txout_target_v& txo
   {
     val.AddMember("type", "txout_to_key", doc.GetAllocator());
     INSERT_INTO_JSON_OBJECT(val, doc, value, boost::get<cryptonote::txout_to_key>(txout));
+  }
+  else if (txout.type() == typeid(cryptonote::txout_offshore))
+  {
+    val.AddMember("type", "txout_offshore", doc.GetAllocator());
+    INSERT_INTO_JSON_OBJECT(val, doc, value, boost::get<cryptonote::txout_offshore>(txout));
   }
 }
 
@@ -467,6 +540,12 @@ void fromJsonValue(const rapidjson::Value& val, cryptonote::txout_target_v& txou
   else if (val["type"] == "txout_to_key")
   {
     cryptonote::txout_to_key tmpVal;
+    fromJsonValue(val["value"], tmpVal);
+    txout = tmpVal;
+  }
+  else if (val["type"] == "txout_offshore")
+  {
+    cryptonote::txout_offshore tmpVal;
     fromJsonValue(val["value"], tmpVal);
     txout = tmpVal;
   }
@@ -519,6 +598,24 @@ void toJsonValue(rapidjson::Document& doc, const cryptonote::txout_to_key& txout
 
 
 void fromJsonValue(const rapidjson::Value& val, cryptonote::txout_to_key& txout)
+{
+  if (!val.IsObject())
+  {
+    throw WRONG_TYPE("json object");
+  }
+
+  GET_FROM_JSON_OBJECT(val, txout.key, key);
+}
+
+void toJsonValue(rapidjson::Document& doc, const cryptonote::txout_offshore& txout, rapidjson::Value& val)
+{
+  val.SetObject();
+
+  INSERT_INTO_JSON_OBJECT(val, doc, key, txout.key);
+}
+
+
+void fromJsonValue(const rapidjson::Value& val, cryptonote::txout_offshore& txout)
 {
   if (!val.IsObject())
   {
@@ -905,6 +1002,7 @@ void toJsonValue(rapidjson::Document& doc, const cryptonote::rpc::BlockHeaderRes
 
   INSERT_INTO_JSON_OBJECT(val, doc, major_version, response.major_version);
   INSERT_INTO_JSON_OBJECT(val, doc, minor_version, response.minor_version);
+  INSERT_INTO_JSON_OBJECT(val, doc, usd_rate, response.usd_rate);
   INSERT_INTO_JSON_OBJECT(val, doc, timestamp, response.timestamp);
   INSERT_INTO_JSON_OBJECT(val, doc, prev_id, response.prev_id);
   INSERT_INTO_JSON_OBJECT(val, doc, nonce, response.nonce);
@@ -924,6 +1022,7 @@ void fromJsonValue(const rapidjson::Value& val, cryptonote::rpc::BlockHeaderResp
 
   GET_FROM_JSON_OBJECT(val, response.major_version, major_version);
   GET_FROM_JSON_OBJECT(val, response.minor_version, minor_version);
+  GET_FROM_JSON_OBJECT(val, response.usd_rate, usd_rate);
   GET_FROM_JSON_OBJECT(val, response.timestamp, timestamp);
   GET_FROM_JSON_OBJECT(val, response.prev_id, prev_id);
   GET_FROM_JSON_OBJECT(val, response.nonce, nonce);

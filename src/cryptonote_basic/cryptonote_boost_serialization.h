@@ -104,6 +104,12 @@ namespace boost
   }
 
   template <class Archive>
+  inline void serialize(Archive &a, cryptonote::txout_offshore &x, const boost::serialization::version_type ver)
+  {
+    a & x.key;
+  }
+
+  template <class Archive>
   inline void serialize(Archive &a, cryptonote::txout_to_scripthash &x, const boost::serialization::version_type ver)
   {
     a & x.hash;
@@ -134,6 +140,22 @@ namespace boost
 
   template <class Archive>
   inline void serialize(Archive &a, cryptonote::txin_to_key &x, const boost::serialization::version_type ver)
+  {
+    a & x.amount;
+    a & x.key_offsets;
+    a & x.k_image;
+  }
+
+  template <class Archive>
+  inline void serialize(Archive &a, cryptonote::txin_offshore &x, const boost::serialization::version_type ver)
+  {
+    a & x.amount;
+    a & x.key_offsets;
+    a & x.k_image;
+  }
+
+  template <class Archive>
+  inline void serialize(Archive &a, cryptonote::txin_onshore &x, const boost::serialization::version_type ver)
   {
     a & x.amount;
     a & x.key_offsets;
@@ -183,6 +205,9 @@ namespace boost
   {
     a & b.major_version;
     a & b.minor_version;
+    if (b.major_version >= 4) {
+      a & b.usd_rate;
+    }
     a & b.timestamp;
     a & b.prev_id;
     a & b.nonce;

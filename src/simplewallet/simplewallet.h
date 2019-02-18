@@ -143,6 +143,9 @@ namespace cryptonote
     bool transfer_main(int transfer_type, const std::vector<std::string> &args);
     bool transfer(const std::vector<std::string> &args);
     bool transfer_new(const std::vector<std::string> &args);
+    bool transfer_offshore(const std::vector<std::string> &args);
+    bool transfer_onshore(const std::vector<std::string> &args);
+    bool move_offshore(const std::vector<std::string> &args);
     bool locked_transfer(const std::vector<std::string> &args);
     bool sweep_main(uint64_t below, const std::vector<std::string> &args);
     bool sweep_all(const std::vector<std::string> &args);
@@ -317,7 +320,6 @@ namespace cryptonote
     bool m_restoring;           // are we restoring, by whatever method?
     uint64_t m_restore_height;  // optional
     bool m_do_not_relay;
-    bool m_use_english_language_names;
 
     epee::console_handlers_binder m_cmd_binder;
 

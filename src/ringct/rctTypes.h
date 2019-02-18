@@ -246,6 +246,7 @@ namespace rct {
           // inputs/outputs not saved, only here for serialization help
           // FIELD(message) - not serialized, it can be reconstructed
           // FIELD(mixRing) - not serialized, it can be reconstructed
+
           if (type == RCTTypeSimple) // moved to prunable with bulletproofs
           {
             ar.tag("pseudoOuts");

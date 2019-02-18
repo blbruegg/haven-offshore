@@ -383,21 +383,24 @@ void BlockchainBDB::add_output(const crypto::hash& tx_hash, const tx_out& tx_out
     if (m_output_amounts->put(DB_DEFAULT_TX, &val_amount, &k, 0))
         throw0(DB_ERROR("Failed to add output amount to db transaction."));
 
+    output_data_t od;
     if (tx_output.target.type() == typeid(txout_to_key))
     {
-        output_data_t od;
-        od.pubkey = boost::get < txout_to_key > (tx_output.target).key;
-        od.unlock_time = unlock_time;
-        od.height = m_height;
-
-        Dbt_copy<output_data_t> data(od);
-        if (m_output_keys->put(DB_DEFAULT_TX, &k, &data, 0))
-            throw0(DB_ERROR("Failed to add output pubkey to db transaction"));
+      od.pubkey = boost::get < txout_to_key > (tx_output.target).key;
+    }
+    else if (tx_output.target.type() == typeid(txout_offshore)) {
+      od.pubkey = boost::get < txout_offshore > (tx_output.target).key;
     }
     else
     {
-      throw0(DB_ERROR("Wrong output type: expected txout_to_key"));
+      throw0(DB_ERROR("Wrong output type: expected txout_to_key or txout_offshore"));
     }
+
+    od.unlock_time = unlock_time;
+    od.height = m_height;
+    Dbt_copy<output_data_t> data(od);
+    if (m_output_keys->put(DB_DEFAULT_TX, &k, &data, 0))
+        throw0(DB_ERROR("Failed to add output pubkey to db transaction"));
 
     m_num_outputs++;
 }

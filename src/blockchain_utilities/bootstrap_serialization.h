@@ -41,11 +41,13 @@ namespace cryptonote
     {
       uint8_t  major_version;
       uint8_t  minor_version;
+      uint64_t  usd_rate;
       uint32_t header_size;
 
       BEGIN_SERIALIZE_OBJECT()
         FIELD(major_version);
         FIELD(minor_version);
+        FIELD(usd_rate);
         VARINT_FIELD(header_size);
       END_SERIALIZE()
     };

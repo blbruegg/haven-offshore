@@ -56,10 +56,7 @@ namespace Language
   class Lojban: public Base
   {
   public:
-    Lojban(): Base("Lojban", "Lojban", {}, 4)
-    {
-      static constexpr const char * const words[NWORDS] =
-      {
+    Lojban(): Base("Lojban", std::vector<std::string>({
       "backi",
       "bacru",
       "badna",
@@ -1686,8 +1683,8 @@ namespace Language
       "noltruti'u",
       "samtci",
       "snaxa'a",
-      };
-      set_words(words);
+      }), 4)
+    {
       populate_maps();
     }
   };

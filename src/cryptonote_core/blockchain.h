@@ -456,6 +456,16 @@ namespace cryptonote
     uint64_t get_num_mature_outputs(uint64_t amount) const;
 
     /**
+     * @brief get random outputs (indices) for an amount
+     *
+     * @param amount the amount
+     * @param count the number of random outputs to choose
+     *
+     * @return the outputs' amount-global indices
+     */
+    std::vector<uint64_t> get_random_outputs(uint64_t amount, uint64_t count) const;
+
+    /**
      * @brief get the public key for an output
      *
      * @param amount the output amount
@@ -464,6 +474,22 @@ namespace cryptonote
      * @return the public key
      */
     crypto::public_key get_output_key(uint64_t amount, uint64_t global_index) const;
+
+    /**
+     * @brief gets random outputs to mix with
+     *
+     * This function takes an RPC request for outputs to mix with
+     * and creates an RPC response with the resultant output indices.
+     *
+     * Outputs to mix with are randomly selected from the utxo set
+     * for each output amount in the request.
+     *
+     * @param req the output amounts and number of mixins to select
+     * @param res return-by-reference the resultant output indices
+     *
+     * @return true
+     */
+    bool get_random_outs_for_amounts(const COMMAND_RPC_GET_RANDOM_OUTPUTS_FOR_AMOUNTS::request& req, COMMAND_RPC_GET_RANDOM_OUTPUTS_FOR_AMOUNTS::response& res) const;
 
     /**
      * @brief gets specific outputs to mix with
@@ -490,6 +516,23 @@ namespace cryptonote
      * @param unlocked out - the output's unlocked state
      */
     void get_output_key_mask_unlocked(const uint64_t& amount, const uint64_t& index, crypto::public_key& key, rct::key& mask, bool& unlocked) const;
+
+    /**
+     * @brief gets random ringct outputs to mix with
+     *
+     * This function takes an RPC request for outputs to mix with
+     * and creates an RPC response with the resultant output indices
+     * and the matching keys.
+     *
+     * Outputs to mix with are randomly selected from the utxo set
+     * for each output amount in the request.
+     *
+     * @param req the output amounts and number of mixins to select
+     * @param res return-by-reference the resultant output indices
+     *
+     * @return true
+     */
+    bool get_random_rct_outs(const COMMAND_RPC_GET_RANDOM_RCT_OUTPUTS::request& req, COMMAND_RPC_GET_RANDOM_RCT_OUTPUTS::response& res) const;
 
     /**
      * @brief gets the global indices for outputs from a given transaction
@@ -595,6 +638,14 @@ namespace cryptonote
      */
     uint64_t get_current_cumulative_blocksize_limit() const;
 
+
+    /**
+     * @brief gets the current usd rate
+     *
+     * @return the rate
+     */
+    bool get_current_rate(uint64_t& rate, uint64_t timestamp) const;
+
     /**
      * @brief gets the difficulty of the block with a given height
      *
@@ -657,6 +708,13 @@ namespace cryptonote
      * @param enforce the new enforcement setting
      */
     void set_enforce_dns_checkpoints(bool enforce);
+
+    /**
+     * @brief configure whether we are a validator
+     *
+     * @param validator_node the new validator setting
+     */
+    void set_validator_node(bool validator_node);
 
     /**
      * @brief loads new checkpoints from a file and optionally from DNS
@@ -960,6 +1018,7 @@ namespace cryptonote
 
     checkpoints m_checkpoints;
     bool m_enforce_dns_checkpoints;
+    bool m_validator_node;
 
     HardFork *m_hardfork;
 
@@ -990,6 +1049,12 @@ namespace cryptonote
     template<class visitor_t>
     inline bool scan_outputkeys_for_indexes(size_t tx_version, const txin_to_key& tx_in_to_key, visitor_t &vis, const crypto::hash &tx_prefix_hash, uint64_t* pmax_related_block_height = NULL) const;
 
+    template<class visitor_t>
+    inline bool scan_outputkeys_for_indexes(size_t tx_version, const txin_onshore& tx_in_to_key, visitor_t &vis, const crypto::hash &tx_prefix_hash, uint64_t* pmax_related_block_height = NULL) const;
+
+    template<class visitor_t>
+    inline bool scan_outputkeys_for_indexes(size_t tx_version, const txin_offshore& tx_in_to_key, visitor_t &vis, const crypto::hash &tx_prefix_hash, uint64_t* pmax_related_block_height = NULL) const;
+
     /**
      * @brief collect output public keys of a transaction input set
      *
@@ -1011,6 +1076,8 @@ namespace cryptonote
      * @return false if any output is not yet unlocked, or is missing, otherwise true
      */
     bool check_tx_input(size_t tx_version,const txin_to_key& txin, const crypto::hash& tx_prefix_hash, const std::vector<crypto::signature>& sig, const rct::rctSig &rct_signatures, std::vector<rct::ctkey> &output_keys, uint64_t* pmax_related_block_height);
+    bool check_tx_input(size_t tx_version,const txin_offshore& txin, const crypto::hash& tx_prefix_hash, const std::vector<crypto::signature>& sig, const rct::rctSig &rct_signatures, std::vector<rct::ctkey> &output_keys, uint64_t* pmax_related_block_height);
+    bool check_tx_input(size_t tx_version,const txin_onshore& txin, const crypto::hash& tx_prefix_hash, const std::vector<crypto::signature>& sig, const rct::rctSig &rct_signatures, std::vector<rct::ctkey> &output_keys, uint64_t* pmax_related_block_height);
 
     /**
      * @brief validate a transaction's inputs and their keys
@@ -1165,6 +1232,24 @@ namespace cryptonote
     void get_last_n_blocks_sizes(std::vector<size_t>& sz, size_t count) const;
 
     /**
+     * @brief adds the given output to the requested set of random outputs
+     *
+     * @param result_outs return-by-reference the set the output is to be added to
+     * @param amount the output amount
+     * @param i the output index (indexed to amount)
+     */
+    void add_out_to_get_random_outs(COMMAND_RPC_GET_RANDOM_OUTPUTS_FOR_AMOUNTS::outs_for_amount& result_outs, uint64_t amount, size_t i) const;
+
+    /**
+     * @brief adds the given output to the requested set of random ringct outputs
+     *
+     * @param outs return-by-reference the set the output is to be added to
+     * @param amount the output amount (0 for rct inputs)
+     * @param i the rct output index
+     */
+    void add_out_to_get_rct_random_outs(std::list<COMMAND_RPC_GET_RANDOM_RCT_OUTPUTS::out_entry>& outs, uint64_t amount, size_t i) const;
+
+    /**
      * @brief checks if a transaction is unlocked (its outputs spendable)
      *
      * This function checks to see if a transaction is unlocked.
@@ -1254,6 +1339,18 @@ namespace cryptonote
      * @return true unless start_height is greater than the current blockchain height
      */
     bool complete_timestamps_vector(uint64_t start_height, std::vector<uint64_t>& timestamps);
+
+    /**
+     * @brief checks a block's usd_rate
+     *
+     * This function checks the blocks usd_rate against the oracle usd_rate for
+     * that height and rejects if it differs.
+     *
+     * @param b the block to be checked
+     *
+     * @return true if the block's usd_rate is valid, otherwise false
+     */
+    bool check_block_usd_rate(const block& b) const;
 
     /**
      * @brief calculate the block size limit for the next block to be added

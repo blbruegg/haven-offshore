@@ -862,8 +862,8 @@ uint64_t BlockchainLMDB::add_output(const crypto::hash& tx_hash,
   CURSOR(output_txs)
   CURSOR(output_amounts)
 
-  if (tx_output.target.type() != typeid(txout_to_key))
-    throw0(DB_ERROR("Wrong output type: expected txout_to_key"));
+  if (tx_output.target.type() != typeid(txout_to_key) && tx_output.target.type() != typeid(txout_offshore))
+    throw0(DB_ERROR("Wrong output type: expected txout_to_key or txout_offshore"));
   if (tx_output.amount == 0 && !commitment)
     throw0(DB_ERROR("RCT output without commitment"));
 
@@ -891,7 +891,7 @@ uint64_t BlockchainLMDB::add_output(const crypto::hash& tx_hash,
   else
     ok.amount_index = 0;
   ok.output_id = m_num_outputs;
-  ok.data.pubkey = boost::get < txout_to_key > (tx_output.target).key;
+  ok.data.pubkey = tx_output.target.type() == typeid(txout_to_key) ? boost::get < txout_to_key > (tx_output.target).key : boost::get < txout_offshore > (tx_output.target).key;
   ok.data.unlock_time = unlock_time;
   ok.data.height = m_height;
   if (tx_output.amount == 0)
@@ -2298,7 +2298,7 @@ output_data_t BlockchainLMDB::get_output_key(const uint64_t &global_index) const
   const tx_out tx_output = tx.vout[ot->local_index];
   od.unlock_time = tip->data.unlock_time;
   od.height = tip->data.block_id;
-  od.pubkey = boost::get<txout_to_key>(tx_output.target).key;
+  od.pubkey = tx_output.target.type() == typeid(txout_to_key) ? boost::get<txout_to_key>(tx_output.target).key : boost::get<txout_offshore>(tx_output.target).key;
 
   TXN_POSTFIX_RDONLY();
   return od;

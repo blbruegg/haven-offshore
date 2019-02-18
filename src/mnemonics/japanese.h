@@ -50,7 +50,7 @@
 
 /*!
  * \file japanese.h
- *
+ * 
  * \brief Japanese word list and map.
  */
 
@@ -71,10 +71,7 @@ namespace Language
   class Japanese: public Base
   {
   public:
-    Japanese(): Base("日本語", "Japanese", {}, 3)
-    {
-      static constexpr const char * const words[NWORDS] =
-      {
+    Japanese(): Base("日本語", std::vector<std::string>({
         "あいこくしん",
         "あいさつ",
         "あいだ",
@@ -1701,8 +1698,8 @@ namespace Language
         "ひさん",
         "びじゅつかん",
         "ひしょ"
-      };
-      set_words(words);
+      }), 3)
+    {
       populate_maps();
     }
   };

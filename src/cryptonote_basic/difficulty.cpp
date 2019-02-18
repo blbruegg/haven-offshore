@@ -216,7 +216,7 @@ namespace cryptonote {
 		assert(n == cumulative_difficulties.size());
 		assert(n <= DIFFICULTY_WINDOW_V2);
     // If new coin, just "give away" first 5 blocks at low difficulty
-    if ( n < 6 ) { return  1; }
+    if ( n < 20 ) { return  1; }
     // If height "n" is from 6 to N, then reset N to n-1.
     else if (n < N+1) { N=n-1; }
 

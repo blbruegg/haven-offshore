@@ -108,6 +108,9 @@ typedef cryptonote::simple_wallet sw;
 enum TransferType {
   TransferOriginal,
   TransferNew,
+  TransferOffshore,
+  TransferOnshore,
+  MoveOffshore,
   TransferLocked,
 };
 
@@ -130,7 +133,6 @@ namespace
   const command_line::arg_descriptor<bool> arg_allow_mismatched_daemon_version = {"allow-mismatched-daemon-version", sw::tr("Allow communicating with a daemon that uses a different RPC version"), false};
   const command_line::arg_descriptor<uint64_t> arg_restore_height = {"restore-height", sw::tr("Restore from specific blockchain height"), 0};
   const command_line::arg_descriptor<bool> arg_do_not_relay = {"do-not-relay", sw::tr("The newly created transaction will not be relayed to the haven network"), false};
-  const command_line::arg_descriptor<bool> arg_use_english_language_names = {"use-english-language-names", sw::tr("Display English language names"), false};
 
   const command_line::arg_descriptor< std::vector<std::string> > arg_command = {"command", ""};
 
@@ -366,7 +368,7 @@ namespace
       LOG_ERROR("RPC error: " << e.to_string());
       fail_msg_writer() << tr("RPC error: ") << e.what();
     }
-    catch (const tools::error::get_outs_error &e)
+    catch (const tools::error::get_random_outs_error &e)
     {
       fail_msg_writer() << tr("failed to get random outputs to mix: ") << e.what();
     }
@@ -1560,6 +1562,15 @@ simple_wallet::simple_wallet()
   m_cmd_binder.set_handler("transfer", boost::bind(&simple_wallet::transfer_new, this, _1),
                            tr("transfer [index=<N1>[,<N2>,...]] [<priority>] [<ring_size>] <address> <amount> [<payment_id>]"),
                            tr("Transfer <amount> to <address>. If the parameter \"index=<N1>[,<N2>,...]\" is specified, the wallet uses outputs received by addresses of those indices. If omitted, the wallet randomly chooses address indices to be used. In any case, it tries its best not to combine outputs across multiple addresses. <priority> is the priority of the transaction. The higher the priority, the higher the fee of the transaction. Valid values in priority order (from lowest to highest) are: unimportant, normal, elevated, priority. If omitted, the default value (see the command \"set priority\") is used. <ring_size> is the number of inputs to include for untraceability. Multiple payments can be made at once by adding <address_2> <amount_2> etcetera (before the payment ID, if it's included)"));
+  m_cmd_binder.set_handler("transfer_offshore", boost::bind(&simple_wallet::transfer_offshore, this, _1),
+                           tr("transfer_offshore [index=<N1>[,<N2>,...]] [<priority>] [<ring_size>] <address> <amount> [<payment_id>]"),
+                           tr("transfer_offshore <amount> to <address>. If the parameter \"index=<N1>[,<N2>,...]\" is specified, the wallet uses outputs received by addresses of those indices. If omitted, the wallet randomly chooses address indices to be used. In any case, it tries its best not to combine outputs across multiple addresses. <priority> is the priority of the transaction. The higher the priority, the higher the fee of the transaction. Valid values in priority order (from lowest to highest) are: unimportant, normal, elevated, priority. If omitted, the default value (see the command \"set priority\") is used. <ring_size> is the number of inputs to include for untraceability. Multiple payments can be made at once by adding <address_2> <amount_2> etcetera (before the payment ID, if it's included)"));
+  m_cmd_binder.set_handler("transfer_onshore", boost::bind(&simple_wallet::transfer_onshore, this, _1),
+                           tr("transfer_onshore [index=<N1>[,<N2>,...]] [<priority>] [<ring_size>] <address> <amount> [<payment_id>]"),
+                           tr("transfer_onshore <amount> to <address>. If the parameter \"index=<N1>[,<N2>,...]\" is specified, the wallet uses outputs received by addresses of those indices. If omitted, the wallet randomly chooses address indices to be used. In any case, it tries its best not to combine outputs across multiple addresses. <priority> is the priority of the transaction. The higher the priority, the higher the fee of the transaction. Valid values in priority order (from lowest to highest) are: unimportant, normal, elevated, priority. If omitted, the default value (see the command \"set priority\") is used. <ring_size> is the number of inputs to include for untraceability. Multiple payments can be made at once by adding <address_2> <amount_2> etcetera (before the payment ID, if it's included)"));
+  m_cmd_binder.set_handler("move_offshore", boost::bind(&simple_wallet::move_offshore, this, _1),
+                           tr("move_offshore [index=<N1>[,<N2>,...]] [<priority>] [<ring_size>] <address> <amount> [<payment_id>]"),
+                           tr("move_offshore <amount> to <address>. If the parameter \"index=<N1>[,<N2>,...]\" is specified, the wallet uses outputs received by addresses of those indices. If omitted, the wallet randomly chooses address indices to be used. In any case, it tries its best not to combine outputs across multiple addresses. <priority> is the priority of the transaction. The higher the priority, the higher the fee of the transaction. Valid values in priority order (from lowest to highest) are: unimportant, normal, elevated, priority. If omitted, the default value (see the command \"set priority\") is used. <ring_size> is the number of inputs to include for untraceability. Multiple payments can be made at once by adding <address_2> <amount_2> etcetera (before the payment ID, if it's included)"));
   m_cmd_binder.set_handler("locked_transfer",
                            boost::bind(&simple_wallet::locked_transfer, this, _1),
                            tr("locked_transfer [index=<N1>[,<N2>,...]] [<priority>] [<ring_size>] <addr> <amount> <lockblocks> [<payment_id>]"),
@@ -1812,10 +1823,6 @@ bool simple_wallet::set_variable(const std::vector<std::string> &args)
   if (args.empty())
   {
     success_msg_writer() << "seed = " << m_wallet->get_seed_language();
-    std::string seed_language = m_wallet->get_seed_language();
-    if (m_use_english_language_names)
-      seed_language = crypto::ElectrumWords::get_english_name_for(seed_language);
-    success_msg_writer() << "seed = " << seed_language;
     success_msg_writer() << "always-confirm-transfers = " << m_wallet->always_confirm_transfers();
     success_msg_writer() << "print-ring-members = " << m_wallet->print_ring_members();
     success_msg_writer() << "store-tx-info = " << m_wallet->store_tx_info();
@@ -2567,7 +2574,6 @@ bool simple_wallet::handle_command_line(const boost::program_options::variables_
   m_allow_mismatched_daemon_version = command_line::get_arg(vm, arg_allow_mismatched_daemon_version);
   m_restore_height                = command_line::get_arg(vm, arg_restore_height);
   m_do_not_relay                  = command_line::get_arg(vm, arg_do_not_relay);
-  m_use_english_language_names    = command_line::get_arg(vm, arg_use_english_language_names);
   m_restoring                     = !m_generate_from_view_key.empty() ||
                                     !m_generate_from_spend_key.empty() ||
                                     !m_generate_from_keys.empty() ||
@@ -2613,9 +2619,8 @@ std::string simple_wallet::get_mnemonic_language()
   std::vector<std::string> language_list;
   std::string language_choice;
   int language_number = -1;
-  crypto::ElectrumWords::get_language_list(language_list, m_use_english_language_names);
+  crypto::ElectrumWords::get_language_list(language_list);
   std::cout << tr("List of available languages for your wallet's seed:") << std::endl;
-  std::cout << tr("If your display freezes, exit blind with ^C, then run again with --use-english-language-names") << std::endl;
   int ii;
   std::vector<std::string>::iterator it;
   for (it = language_list.begin(), ii = 0; it != language_list.end(); it++, ii++)
@@ -3257,7 +3262,9 @@ bool simple_wallet::show_balance_unlocked(bool detailed)
   const std::string tag = m_wallet->get_account_tags().second[m_current_subaddress_account];
   success_msg_writer() << tr("Tag: ") << (tag.empty() ? std::string{tr("(No tag assigned)")} : tag);
   success_msg_writer() << tr("Balance: ") << print_money(m_wallet->balance(m_current_subaddress_account)) << ", "
-    << tr("unlocked balance: ") << print_money(m_wallet->unlocked_balance(m_current_subaddress_account)) << extra;
+    << tr("unlocked balance: ") << print_money(m_wallet->unlocked_balance(m_current_subaddress_account)) << ", "
+    << tr("offshore balance: $") << print_offshore_money(m_wallet->offshore_balance(m_current_subaddress_account)) << " USD" << ", "
+    << tr("unlocked offshore balance: $") << print_offshore_money(m_wallet->unlocked_offshore_balance(m_current_subaddress_account)) << " USD" << extra;
   std::map<uint32_t, uint64_t> balance_per_subaddress = m_wallet->balance_per_subaddress(m_current_subaddress_account);
   std::map<uint32_t, uint64_t> unlocked_balance_per_subaddress = m_wallet->unlocked_balance_per_subaddress(m_current_subaddress_account);
   if (!detailed || balance_per_subaddress.empty())
@@ -3465,11 +3472,23 @@ bool simple_wallet::show_blockchain_height(const std::vector<std::string>& args)
     return true;
 
   std::string err;
+
+  net_utils::http::http_simple_client http_client;
+  COMMAND_RPC_GET_USD_PRICE::request req = AUTO_VAL_INIT(req);
+  COMMAND_RPC_GET_USD_PRICE::response res = AUTO_VAL_INIT(res);
+
+  bool r = http_client.set_server("127.0.0.1:8080", boost::none);
+
+  net_utils::invoke_http_json("/price", req, res, http_client, std::chrono::seconds(10));
+
   uint64_t bc_height = get_daemon_blockchain_height(err);
-  if (err.empty())
+  if (err.empty()) {
     success_msg_writer() << bc_height;
-  else
+    success_msg_writer() << res.price;
+  }
+  else {
     fail_msg_writer() << tr("failed to get blockchain height: ") << err;
+  }
   return true;
 }
 //----------------------------------------------------------------------------------------------------
@@ -3812,12 +3831,24 @@ bool simple_wallet::transfer_main(int transfer_type, const std::vector<std::stri
         unlock_block = bc_height + locked_blocks;
         ptx_vector = m_wallet->create_transactions_2(dsts, fake_outs_count, unlock_block /* unlock_time */, priority, extra, m_current_subaddress_account, subaddr_indices, m_trusted_daemon);
       break;
-      default:
-        LOG_ERROR("Unknown transfer method, using default");
-        /* FALLTHRU */
       case TransferNew:
         ptx_vector = m_wallet->create_transactions_2(dsts, fake_outs_count, 0 /* unlock_time */, priority, extra, m_current_subaddress_account, subaddr_indices, m_trusted_daemon);
       break;
+      case TransferOffshore:
+        ptx_vector = m_wallet->create_transactions_2(dsts, fake_outs_count, 0 /* unlock_time */, priority, extra, m_current_subaddress_account, subaddr_indices, m_trusted_daemon, true);
+      break;
+      case TransferOnshore:
+        ptx_vector = m_wallet->create_transactions_2(dsts, fake_outs_count, 0 /* unlock_time */, priority, extra, m_current_subaddress_account, subaddr_indices, m_trusted_daemon, false, true);
+      break;
+      case MoveOffshore:
+        ptx_vector = m_wallet->create_transactions_2(dsts, fake_outs_count, 0 /* unlock_time */, priority, extra, m_current_subaddress_account, subaddr_indices, m_trusted_daemon, false, false, true);
+      break;
+      default:
+        LOG_ERROR("Unknown transfer method, using original");
+        /* FALLTHRU */
+      case TransferOriginal:
+        ptx_vector = m_wallet->create_transactions(dsts, fake_outs_count, 0 /* unlock_time */, priority, extra, m_trusted_daemon);
+        break;
     }
 
     if (ptx_vector.empty())
@@ -3886,8 +3917,12 @@ bool simple_wallet::transfer_main(int transfer_type, const std::vector<std::stri
         for (size_t n = 0; n < ptx_vector.size(); ++n)
         {
           total_fee += ptx_vector[n].fee;
-          for (auto i: ptx_vector[n].selected_transfers)
-            total_sent += m_wallet->get_transfer_details(i).amount();
+          for (auto i: ptx_vector[n].selected_transfers) {
+            if (transfer_type == TransferOnshore || transfer_type == MoveOffshore)
+              total_sent += m_wallet->get_offshore_transfer_details(i).amount();
+            else
+              total_sent += m_wallet->get_transfer_details(i).amount();
+          }
           total_sent -= ptx_vector[n].change_dts.amount + ptx_vector[n].fee;
 
           if (ptx_vector[n].dust_added_to_fee)
@@ -3997,6 +4032,21 @@ bool simple_wallet::transfer(const std::vector<std::string> &args_)
 bool simple_wallet::transfer_new(const std::vector<std::string> &args_)
 {
   return transfer_main(TransferNew, args_);
+}
+//----------------------------------------------------------------------------------------------------
+bool simple_wallet::transfer_offshore(const std::vector<std::string> &args_)
+{
+  return transfer_main(TransferOffshore, args_);
+}
+//----------------------------------------------------------------------------------------------------
+bool simple_wallet::transfer_onshore(const std::vector<std::string> &args_)
+{
+  return transfer_main(TransferOnshore, args_);
+}
+//----------------------------------------------------------------------------------------------------
+bool simple_wallet::move_offshore(const std::vector<std::string> &args_)
+{
+  return transfer_main(MoveOffshore, args_);
 }
 //----------------------------------------------------------------------------------------------------
 bool simple_wallet::locked_transfer(const std::vector<std::string> &args_)
@@ -6529,7 +6579,6 @@ int main(int argc, char* argv[])
   command_line::add_arg(desc_params, arg_allow_mismatched_daemon_version);
   command_line::add_arg(desc_params, arg_restore_height);
   command_line::add_arg(desc_params, arg_do_not_relay);
-  command_line::add_arg(desc_params, arg_use_english_language_names);
 
   po::positional_options_description positional_options;
   positional_options.add(arg_command.name, -1);

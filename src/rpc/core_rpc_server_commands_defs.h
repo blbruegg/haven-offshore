@@ -660,6 +660,48 @@ namespace cryptonote
     };
   };
   //-----------------------------------------------
+  struct COMMAND_RPC_GET_RANDOM_OUTPUTS_FOR_AMOUNTS
+  {
+    struct request
+    {
+      std::vector<uint64_t> amounts;
+      uint64_t              outs_count;
+      BEGIN_KV_SERIALIZE_MAP()
+        KV_SERIALIZE(amounts)
+        KV_SERIALIZE(outs_count)
+      END_KV_SERIALIZE_MAP()
+    };
+
+#pragma pack (push, 1)
+    struct out_entry
+    {
+      uint64_t global_amount_index;
+      crypto::public_key out_key;
+    };
+#pragma pack(pop)
+
+    struct outs_for_amount
+    {
+      uint64_t amount;
+      std::list<out_entry> outs;
+
+      BEGIN_KV_SERIALIZE_MAP()
+        KV_SERIALIZE(amount)
+        KV_SERIALIZE_CONTAINER_POD_AS_BLOB(outs)
+      END_KV_SERIALIZE_MAP()
+    };
+
+    struct response
+    {
+      std::vector<outs_for_amount> outs;
+      std::string status;
+      BEGIN_KV_SERIALIZE_MAP()
+        KV_SERIALIZE(outs)
+        KV_SERIALIZE(status)
+      END_KV_SERIALIZE_MAP()
+    };
+  };
+  //-----------------------------------------------
   struct get_outputs_out
   {
     uint64_t amount;
@@ -751,6 +793,36 @@ namespace cryptonote
     };
   };
 
+  struct COMMAND_RPC_GET_RANDOM_RCT_OUTPUTS
+  {
+    struct request
+    {
+      uint64_t outs_count;
+      BEGIN_KV_SERIALIZE_MAP()
+        KV_SERIALIZE(outs_count)
+      END_KV_SERIALIZE_MAP()
+    };
+
+#pragma pack (push, 1)
+    struct out_entry
+    {
+      uint64_t amount;
+      uint64_t global_amount_index;
+      crypto::public_key out_key;
+      rct::key commitment;
+    };
+#pragma pack(pop)
+
+    struct response
+    {
+      std::list<out_entry> outs;
+      std::string status;
+      BEGIN_KV_SERIALIZE_MAP()
+        KV_SERIALIZE_CONTAINER_POD_AS_BLOB(outs)
+        KV_SERIALIZE(status)
+      END_KV_SERIALIZE_MAP()
+    };
+  };
   //-----------------------------------------------
   struct COMMAND_RPC_SEND_RAW_TX
   {
@@ -908,6 +980,27 @@ namespace cryptonote
   };
 
   //-----------------------------------------------
+  struct COMMAND_RPC_GET_USD_PRICE
+  {
+    struct request
+    {
+
+      BEGIN_KV_SERIALIZE_MAP()
+      END_KV_SERIALIZE_MAP()
+    };
+
+
+    struct response
+    {
+      uint64_t price;
+
+      BEGIN_KV_SERIALIZE_MAP()
+        KV_SERIALIZE(price)
+      END_KV_SERIALIZE_MAP()
+    };
+  };
+
+  //-----------------------------------------------
   struct COMMAND_RPC_MINING_STATUS
   {
     struct request
@@ -1040,6 +1133,7 @@ namespace cryptonote
   {
       uint8_t major_version;
       uint8_t minor_version;
+      uint8_t usd_rate;
       uint64_t timestamp;
       std::string prev_hash;
       uint32_t nonce;
@@ -1055,6 +1149,7 @@ namespace cryptonote
       BEGIN_KV_SERIALIZE_MAP()
         KV_SERIALIZE(major_version)
         KV_SERIALIZE(minor_version)
+        KV_SERIALIZE(usd_rate)
         KV_SERIALIZE(timestamp)
         KV_SERIALIZE(prev_hash)
         KV_SERIALIZE(nonce)

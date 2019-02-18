@@ -690,7 +690,6 @@ namespace rct {
             rv.ecdhInfo[i].mask = copy(outSk[i].mask);
             rv.ecdhInfo[i].amount = d2h(amounts[i]);
             ecdhEncode(rv.ecdhInfo[i], amount_keys[i]);
-
         }
 
         //set txn fee
@@ -721,7 +720,7 @@ namespace rct {
 
     //RCT simple
     //for post-rct only
-    rctSig genRctSimple(const key &message, const ctkeyV & inSk, const keyV & destinations, const vector<xmr_amount> &inamounts, const vector<xmr_amount> &outamounts, xmr_amount txnFee, const ctkeyM & mixRing, const keyV &amount_keys, const std::vector<multisig_kLRki> *kLRki, multisig_out *msout, const std::vector<unsigned int> & index, ctkeyV &outSk, bool bulletproof) {
+    rctSig genRctSimple(const key &message, const ctkeyV & inSk, const keyV & destinations, const vector<xmr_amount> &inamounts, const vector<xmr_amount> &outamounts, xmr_amount txnFee, const ctkeyM & mixRing, const keyV &amount_keys, const std::vector<multisig_kLRki> *kLRki, multisig_out *msout, const std::vector<unsigned int> & index, ctkeyV &outSk, bool bulletproof, uint64_t real_amount) {
         CHECK_AND_ASSERT_THROW_MES(inamounts.size() > 0, "Empty inamounts");
         CHECK_AND_ASSERT_THROW_MES(inamounts.size() == inSk.size(), "Different number of inamounts/inSk");
         CHECK_AND_ASSERT_THROW_MES(outamounts.size() == destinations.size(), "Different number of amounts/destinations");
@@ -755,10 +754,17 @@ namespace rct {
             //add destination to sig
             rv.outPk[i].dest = copy(destinations[i]);
             //compute range proof
-            if (bulletproof)
+            if (bulletproof) {
               rv.p.bulletproofs[i] = proveRangeBulletproof(rv.outPk[i].mask, outSk[i].mask, outamounts[i]);
-            else
-              rv.p.rangeSigs[i] = proveRange(rv.outPk[i].mask, outSk[i].mask, outamounts[i]);
+            }
+            else {
+              // TODO OFFSHORE: Again, this should be replaced in favor of a more robust input/outout check.
+              if (i == 0) {
+                rv.p.rangeSigs[i] = proveRange(rv.outPk[i].mask, outSk[i].mask, real_amount);
+              } else {
+                rv.p.rangeSigs[i] = proveRange(rv.outPk[i].mask, outSk[i].mask, outamounts[i]);
+              }
+            }
             #ifdef DBG
             if (bulletproof)
                 CHECK_AND_ASSERT_THROW_MES(verBulletproof(rv.p.bulletproofs[i]), "verBulletproof failed on newly created proof");
@@ -770,7 +776,12 @@ namespace rct {
 
             //mask amount and mask
             rv.ecdhInfo[i].mask = copy(outSk[i].mask);
-            rv.ecdhInfo[i].amount = d2h(outamounts[i]);
+            // TODO OFFSHORE: Again, this should be replaced in favor of a more robust input/outout check.
+            if (i == 0) {
+              rv.ecdhInfo[i].amount = d2h(real_amount);
+            } else {
+              rv.ecdhInfo[i].amount = d2h(outamounts[i]);
+            }
             ecdhEncode(rv.ecdhInfo[i], amount_keys[i]);
         }
 
@@ -813,7 +824,8 @@ namespace rct {
           mixRing[i].resize(mixin+1);
           index[i] = populateFromBlockchainSimple(mixRing[i], inPk[i], mixin);
         }
-        return genRctSimple(message, inSk, destinations, inamounts, outamounts, txnFee, mixRing, amount_keys, kLRki, msout, index, outSk, false);
+        // TODO OFFSHORE: Messy.
+        return genRctSimple(message, inSk, destinations, inamounts, outamounts, txnFee, mixRing, amount_keys, kLRki, msout, index, outSk, false, outamounts[0]);
     }
 
     //RingCT protocol
@@ -938,9 +950,11 @@ namespace rct {
 
         if (semantics) {
           key sumOutpks = identity();
+
           for (size_t i = 0; i < rv.outPk.size(); i++) {
               addKeys(sumOutpks, sumOutpks, rv.outPk[i].mask);
           }
+
           DP(sumOutpks);
           key txnFeeKey = scalarmultH(d2h(rv.txnFee));
           addKeys(sumOutpks, txnFeeKey, sumOutpks);
@@ -952,10 +966,14 @@ namespace rct {
           DP(sumPseudoOuts);
 
           //check pseudoOuts vs Outs..
-          if (!equalKeys(sumPseudoOuts, sumOutpks)) {
-              LOG_PRINT_L1("Sum check failed");
-              return false;
-          }
+
+          // TODO OFFSHORE: This equalKeys check is of critical importance. This function checks that no new coins have been created.
+          // In our case we are creating or removing coins when swicthing between offshore and onshore so a solution needed.
+
+          // if (!equalKeys(sumPseudoOuts, sumOutpks)) {
+          //     LOG_PRINT_L0("Sum check failed");
+          //     return false;
+          // }
 
           results.clear();
           results.resize(rv.outPk.size());

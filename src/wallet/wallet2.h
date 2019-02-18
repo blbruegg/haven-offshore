@@ -227,7 +227,12 @@ namespace tools
 
       bool is_rct() const { return m_rct; }
       uint64_t amount() const { return m_amount; }
-      const crypto::public_key &get_public_key() const { return boost::get<const cryptonote::txout_to_key>(m_tx.vout[m_internal_output_index].target).key; }
+      const crypto::public_key &get_public_key() const {
+        if (m_tx.vout[m_internal_output_index].target.type() == typeid(cryptonote::txout_to_key))
+          return boost::get<const cryptonote::txout_to_key>(m_tx.vout[m_internal_output_index].target).key;
+        else
+          return boost::get<const cryptonote::txout_offshore>(m_tx.vout[m_internal_output_index].target).key;
+      }
 
       BEGIN_SERIALIZE_OBJECT()
         FIELD(m_block_height)
@@ -626,19 +631,29 @@ namespace tools
     // locked & unlocked balance of given or current subaddress account
     uint64_t balance(uint32_t subaddr_index_major) const;
     uint64_t unlocked_balance(uint32_t subaddr_index_major) const;
+    uint64_t offshore_balance(uint32_t subaddr_index_major) const;
+    uint64_t unlocked_offshore_balance(uint32_t subaddr_index_major) const;
     // locked & unlocked balance per subaddress of given or current subaddress account
     std::map<uint32_t, uint64_t> balance_per_subaddress(uint32_t subaddr_index_major) const;
+    std::map<uint32_t, uint64_t> offshore_balance_per_subaddress(uint32_t subaddr_index_major) const;
     std::map<uint32_t, uint64_t> unlocked_balance_per_subaddress(uint32_t subaddr_index_major) const;
+    std::map<uint32_t, uint64_t> unlocked_offshore_balance_per_subaddress(uint32_t subaddr_index_major) const;
     // all locked & unlocked balances of all subaddress accounts
     uint64_t balance_all() const;
     uint64_t unlocked_balance_all() const;
+    template<typename T>
+    void transfer(const std::vector<cryptonote::tx_destination_entry>& dsts, const size_t fake_outputs_count, const std::vector<size_t> &unused_transfers_indices, uint64_t unlock_time, uint64_t fee, const std::vector<uint8_t>& extra, T destination_split_strategy, const tx_dust_policy& dust_policy, bool trusted_daemon);
+    template<typename T>
+    void transfer(const std::vector<cryptonote::tx_destination_entry>& dsts, const size_t fake_outputs_count, const std::vector<size_t> &unused_transfers_indices, uint64_t unlock_time, uint64_t fee, const std::vector<uint8_t>& extra, T destination_split_strategy, const tx_dust_policy& dust_policy, cryptonote::transaction& tx, pending_tx& ptx, bool trusted_daemon);
+    void transfer(const std::vector<cryptonote::tx_destination_entry>& dsts, const size_t fake_outputs_count, const std::vector<size_t> &unused_transfers_indices, uint64_t unlock_time, uint64_t fee, const std::vector<uint8_t>& extra, bool trusted_daemon);
+    void transfer(const std::vector<cryptonote::tx_destination_entry>& dsts, const size_t fake_outputs_count, const std::vector<size_t> &unused_transfers_indices, uint64_t unlock_time, uint64_t fee, const std::vector<uint8_t>& extra, cryptonote::transaction& tx, pending_tx& ptx, bool trusted_daemon);
     template<typename T>
     void transfer_selected(const std::vector<cryptonote::tx_destination_entry>& dsts, const std::vector<size_t>& selected_transfers, size_t fake_outputs_count,
       std::vector<std::vector<tools::wallet2::get_outs_entry>> &outs,
       uint64_t unlock_time, uint64_t fee, const std::vector<uint8_t>& extra, T destination_split_strategy, const tx_dust_policy& dust_policy, cryptonote::transaction& tx, pending_tx &ptx);
     void transfer_selected_rct(std::vector<cryptonote::tx_destination_entry> dsts, const std::vector<size_t>& selected_transfers, size_t fake_outputs_count,
       std::vector<std::vector<tools::wallet2::get_outs_entry>> &outs,
-      uint64_t unlock_time, uint64_t fee, const std::vector<uint8_t>& extra, cryptonote::transaction& tx, pending_tx &ptx, bool bulletproof);
+      uint64_t unlock_time, uint64_t fee, const std::vector<uint8_t>& extra, cryptonote::transaction& tx, pending_tx &ptx, bool bulletproof, bool offshore = false, bool onshore = false, bool offshore_to_offshore = false);
 
     void commit_tx(pending_tx& ptx_vector);
     void commit_tx(std::vector<pending_tx>& ptx_vector);
@@ -655,7 +670,7 @@ namespace tools
     bool load_unsigned_tx(const std::string &unsigned_filename, unsigned_tx_set &exported_txs);
     bool load_tx(const std::string &signed_filename, std::vector<tools::wallet2::pending_tx> &ptx, std::function<bool(const signed_tx_set&)> accept_func = NULL);
     std::vector<pending_tx> create_transactions(std::vector<cryptonote::tx_destination_entry> dsts, const size_t fake_outs_count, const uint64_t unlock_time, uint32_t priority, const std::vector<uint8_t>& extra, bool trusted_daemon);
-    std::vector<wallet2::pending_tx> create_transactions_2(std::vector<cryptonote::tx_destination_entry> dsts, const size_t fake_outs_count, const uint64_t unlock_time, uint32_t priority, const std::vector<uint8_t>& extra, uint32_t subaddr_account, std::set<uint32_t> subaddr_indices, bool trusted_daemon);     // pass subaddr_indices by value on purpose
+    std::vector<wallet2::pending_tx> create_transactions_2(std::vector<cryptonote::tx_destination_entry> dsts, const size_t fake_outs_count, const uint64_t unlock_time, uint32_t priority, const std::vector<uint8_t>& extra, uint32_t subaddr_account, std::set<uint32_t> subaddr_indices, bool trusted_daemon, bool offshore = false, bool onshore = false, bool offshore_to_offshore = false);     // pass subaddr_indices by value on purpose
     std::vector<wallet2::pending_tx> create_transactions_all(uint64_t below, const cryptonote::account_public_address &address, bool is_subaddress, const size_t fake_outs_count, const uint64_t unlock_time, uint32_t priority, const std::vector<uint8_t>& extra, uint32_t subaddr_account, std::set<uint32_t> subaddr_indices, bool trusted_daemon);
     std::vector<wallet2::pending_tx> create_transactions_single(const crypto::key_image &ki, const cryptonote::account_public_address &address, bool is_subaddress, const size_t fake_outs_count, const uint64_t unlock_time, uint32_t priority, const std::vector<uint8_t>& extra, bool trusted_daemon);
     std::vector<wallet2::pending_tx> create_transactions_from(const cryptonote::account_public_address &address, bool is_subaddress, std::vector<size_t> unused_transfers_indices, std::vector<size_t> unused_dust_indices, const size_t fake_outs_count, const uint64_t unlock_time, uint32_t priority, const std::vector<uint8_t>& extra, bool trusted_daemon);
@@ -698,6 +713,10 @@ namespace tools
         a & m_blockchain;
       }
       a & m_transfers;
+      a & m_offshore_transfers;
+
+      a & m_confirmed_offshore_txs;
+
       a & m_account_public_address;
       a & m_key_images;
       if(ver < 6)
@@ -841,6 +860,7 @@ namespace tools
     uint64_t get_num_rct_outputs();
     size_t get_num_transfer_details() const { return m_transfers.size(); }
     const transfer_details &get_transfer_details(size_t idx) const;
+    const transfer_details &get_offshore_transfer_details(size_t idx) const;
 
     void get_hard_fork_info(uint8_t version, uint64_t &earliest_height);
     bool use_fork_rules(uint8_t version, int64_t early_blocks = 0);
@@ -997,7 +1017,9 @@ namespace tools
     uint64_t select_transfers(uint64_t needed_money, std::vector<size_t> unused_transfers_indices, std::vector<size_t>& selected_transfers, bool trusted_daemon);
     bool prepare_file_names(const std::string& file_path);
     void process_unconfirmed(const crypto::hash &txid, const cryptonote::transaction& tx, uint64_t height);
+    void process_offshore_unconfirmed(const crypto::hash &txid, const cryptonote::transaction& tx, uint64_t height);
     void process_outgoing(const crypto::hash &txid, const cryptonote::transaction& tx, uint64_t height, uint64_t ts, uint64_t spent, uint64_t received, uint32_t subaddr_account, const std::set<uint32_t>& subaddr_indices);
+    void process_offshore_outgoing(const crypto::hash &txid, const cryptonote::transaction& tx, uint64_t height, uint64_t ts, uint64_t spent, uint64_t received, uint32_t subaddr_account, const std::set<uint32_t>& subaddr_indices);
     void add_unconfirmed_tx(const cryptonote::transaction& tx, uint64_t amount_in, const std::vector<cryptonote::tx_destination_entry> &dests, const crypto::hash &payment_id, uint64_t change_amount, uint32_t subaddr_account, const std::set<uint32_t>& subaddr_indices);
     void generate_genesis(cryptonote::block& b);
     void check_genesis(const crypto::hash& genesis_hash) const; //throws
@@ -1010,15 +1032,18 @@ namespace tools
     std::vector<uint64_t> get_unspent_amounts_vector();
     uint64_t get_dynamic_per_kb_fee_estimate();
     float get_output_relatedness(const transfer_details &td0, const transfer_details &td1) const;
-    std::vector<size_t> pick_preferred_rct_inputs(uint64_t needed_money, uint32_t subaddr_account, const std::set<uint32_t> &subaddr_indices) const;
+    std::vector<size_t> pick_preferred_rct_inputs(uint64_t needed_money, uint32_t subaddr_account, const std::set<uint32_t> &subaddr_indices, bool use_offshore_outputs) const;
     void set_spent(size_t idx, uint64_t height);
     void set_unspent(size_t idx);
-    void get_outs(std::vector<std::vector<get_outs_entry>> &outs, const std::vector<size_t> &selected_transfers, size_t fake_outputs_count);
+    void set_offshore_spent(size_t idx, uint64_t height);
+    void set_offshore_unspent(size_t idx);
+    void get_outs(std::vector<std::vector<get_outs_entry>> &outs, const std::vector<size_t> &selected_transfers, size_t fake_outputs_count, bool use_offshore_outputs = false);
     bool tx_add_fake_output(std::vector<std::vector<tools::wallet2::get_outs_entry>> &outs, uint64_t global_index, const crypto::public_key& tx_public_key, const rct::key& mask, uint64_t real_index, bool unlocked) const;
     crypto::public_key get_tx_pub_key_from_received_outs(const tools::wallet2::transfer_details &td) const;
     bool should_pick_a_second_output(bool use_rct, size_t n_transfers, const std::vector<size_t> &unused_transfers_indices, const std::vector<size_t> &unused_dust_indices) const;
-    std::vector<size_t> get_only_rct(const std::vector<size_t> &unused_dust_indices, const std::vector<size_t> &unused_transfers_indices) const;
+    std::vector<size_t> get_only_rct(const std::vector<size_t> &unused_dust_indices, const std::vector<size_t> &unused_transfers_indices, bool use_offshore_outputs) const;
     void scan_output(const cryptonote::account_keys &keys, const cryptonote::transaction &tx, const crypto::public_key &tx_pub_key, size_t i, tx_scan_info_t &tx_scan_info, int &num_vouts_received, std::unordered_map<cryptonote::subaddress_index, uint64_t> &tx_money_got_in_outs, std::vector<size_t> &outs);
+    void scan_offshore_output(const cryptonote::account_keys &keys, const cryptonote::transaction &tx, const crypto::public_key &tx_pub_key, size_t i, tx_scan_info_t &tx_scan_info, int &num_vouts_received, std::unordered_map<cryptonote::subaddress_index, uint64_t> &tx_money_got_in_outs, std::vector<size_t> &outs);
     void trim_hashchain();
     crypto::key_image get_multisig_composite_key_image(size_t n) const;
     rct::multisig_kLRki get_multisig_composite_kLRki(size_t n, const crypto::public_key &ignore, std::unordered_set<rct::key> &used_L, std::unordered_set<rct::key> &new_used_L) const;
@@ -1036,12 +1061,14 @@ namespace tools
     std::atomic<uint64_t> m_local_bc_height; //temporary workaround
     std::unordered_map<crypto::hash, unconfirmed_transfer_details> m_unconfirmed_txs;
     std::unordered_map<crypto::hash, confirmed_transfer_details> m_confirmed_txs;
+    std::unordered_map<crypto::hash, confirmed_transfer_details> m_confirmed_offshore_txs;
     std::unordered_multimap<crypto::hash, pool_payment_details> m_unconfirmed_payments;
     std::unordered_map<crypto::hash, crypto::secret_key> m_tx_keys;
     cryptonote::checkpoints m_checkpoints;
     std::unordered_map<crypto::hash, std::vector<crypto::secret_key>> m_additional_tx_keys;
 
     transfer_container m_transfers;
+    transfer_container m_offshore_transfers;
     payment_container m_payments;
     std::unordered_map<crypto::key_image, size_t> m_key_images;
     std::unordered_map<crypto::public_key, size_t> m_pub_keys;
@@ -1541,4 +1568,198 @@ namespace tools
     }
     //----------------------------------------------------------------------------------------------------
   }
+  //----------------------------------------------------------------------------------------------------
+  template<typename T>
+  void wallet2::transfer(const std::vector<cryptonote::tx_destination_entry>& dsts, const size_t fake_outs_count, const std::vector<size_t> &unused_transfers_indices,
+    uint64_t unlock_time, uint64_t fee, const std::vector<uint8_t>& extra, T destination_split_strategy, const tx_dust_policy& dust_policy, bool trusted_daemon)
+  {
+    pending_tx ptx;
+    cryptonote::transaction tx;
+    transfer(dsts, fake_outs_count, unused_transfers_indices, unlock_time, fee, extra, destination_split_strategy, dust_policy, tx, ptx, trusted_daemon);
+  }
+
+  template<typename T>
+  void wallet2::transfer(const std::vector<cryptonote::tx_destination_entry>& dsts, const size_t fake_outputs_count, const std::vector<size_t> &unused_transfers_indices,
+    uint64_t unlock_time, uint64_t fee, const std::vector<uint8_t>& extra, T destination_split_strategy, const tx_dust_policy& dust_policy, cryptonote::transaction& tx, pending_tx &ptx, bool trusted_daemon)
+  {
+    using namespace cryptonote;
+    // throw if attempting a transaction with no destinations
+    THROW_WALLET_EXCEPTION_IF(dsts.empty(), error::zero_destination);
+
+    THROW_WALLET_EXCEPTION_IF(m_multisig, error::wallet_internal_error, "Multisig wallets cannot spend non rct outputs");
+
+    uint64_t upper_transaction_size_limit = get_upper_transaction_size_limit();
+    uint64_t needed_money = fee;
+
+    // calculate total amount being sent to all destinations
+    // throw if total amount overflows uint64_t
+    for(auto& dt: dsts)
+    {
+      THROW_WALLET_EXCEPTION_IF(0 == dt.amount, error::zero_destination);
+      needed_money += dt.amount;
+      THROW_WALLET_EXCEPTION_IF(needed_money < dt.amount, error::tx_sum_overflow, dsts, fee, m_testnet);
+    }
+
+    // randomly select inputs for transaction
+    // throw if requested send amount is greater than (unlocked) amount available to send
+    std::vector<size_t> selected_transfers;
+    uint64_t found_money = select_transfers(needed_money, unused_transfers_indices, selected_transfers, trusted_daemon);
+    THROW_WALLET_EXCEPTION_IF(found_money < needed_money, error::not_enough_unlocked_money, found_money, needed_money - fee, fee);
+
+    uint32_t subaddr_account = m_transfers[*selected_transfers.begin()].m_subaddr_index.major;
+    for (auto i = ++selected_transfers.begin(); i != selected_transfers.end(); ++i)
+      THROW_WALLET_EXCEPTION_IF(subaddr_account != *i, error::wallet_internal_error, "the tx uses funds from multiple accounts");
+
+    typedef COMMAND_RPC_GET_RANDOM_OUTPUTS_FOR_AMOUNTS::out_entry out_entry;
+    typedef cryptonote::tx_source_entry::output_entry tx_output_entry;
+
+    COMMAND_RPC_GET_RANDOM_OUTPUTS_FOR_AMOUNTS::response daemon_resp = AUTO_VAL_INIT(daemon_resp);
+    if(fake_outputs_count)
+    {
+      COMMAND_RPC_GET_RANDOM_OUTPUTS_FOR_AMOUNTS::request req = AUTO_VAL_INIT(req);
+      req.outs_count = fake_outputs_count + 1;// add one to make possible (if need) to skip real output key
+      for(size_t idx: selected_transfers)
+      {
+        const transfer_container::const_iterator it = m_transfers.begin() + idx;
+        THROW_WALLET_EXCEPTION_IF(it->m_tx.vout.size() <= it->m_internal_output_index, error::wallet_internal_error,
+          "m_internal_output_index = " + std::to_string(it->m_internal_output_index) +
+          " is greater or equal to outputs count = " + std::to_string(it->m_tx.vout.size()));
+        req.amounts.push_back(it->amount());
+      }
+
+      m_daemon_rpc_mutex.lock();
+      bool r = epee::net_utils::invoke_http_bin("/getrandom_outs.bin", req, daemon_resp, m_http_client, rpc_timeout);
+      m_daemon_rpc_mutex.unlock();
+      THROW_WALLET_EXCEPTION_IF(!r, error::no_connection_to_daemon, "getrandom_outs.bin");
+      THROW_WALLET_EXCEPTION_IF(daemon_resp.status == CORE_RPC_STATUS_BUSY, error::daemon_busy, "getrandom_outs.bin");
+      THROW_WALLET_EXCEPTION_IF(daemon_resp.status != CORE_RPC_STATUS_OK, error::get_random_outs_error, daemon_resp.status);
+      THROW_WALLET_EXCEPTION_IF(daemon_resp.outs.size() != selected_transfers.size(), error::wallet_internal_error,
+        "daemon returned wrong response for getrandom_outs.bin, wrong amounts count = " +
+        std::to_string(daemon_resp.outs.size()) + ", expected " +  std::to_string(selected_transfers.size()));
+
+      std::unordered_map<uint64_t, uint64_t> scanty_outs;
+      for(COMMAND_RPC_GET_RANDOM_OUTPUTS_FOR_AMOUNTS::outs_for_amount& amount_outs: daemon_resp.outs)
+      {
+        if (amount_outs.outs.size() < fake_outputs_count)
+        {
+          scanty_outs[amount_outs.amount] = amount_outs.outs.size();
+        }
+      }
+      THROW_WALLET_EXCEPTION_IF(!scanty_outs.empty(), error::not_enough_outs_to_mix, scanty_outs, fake_outputs_count);
+    }
+
+    //prepare inputs
+    size_t i = 0;
+    std::vector<cryptonote::tx_source_entry> sources;
+    for(size_t idx: selected_transfers)
+    {
+      sources.resize(sources.size()+1);
+      cryptonote::tx_source_entry& src = sources.back();
+      const transfer_details& td = m_transfers[idx];
+      src.amount = td.amount();
+      src.rct = false;
+      //paste mixin transaction
+      if(daemon_resp.outs.size())
+      {
+        daemon_resp.outs[i].outs.sort([](const out_entry& a, const out_entry& b){return a.global_amount_index < b.global_amount_index;});
+        for(out_entry& daemon_oe: daemon_resp.outs[i].outs)
+        {
+          if(td.m_global_output_index == daemon_oe.global_amount_index)
+            continue;
+          tx_output_entry oe;
+          oe.first = daemon_oe.global_amount_index;
+          oe.second.dest = rct::pk2rct(daemon_oe.out_key);
+          oe.second.mask = rct::identity();
+          src.outputs.push_back(oe);
+          if(src.outputs.size() >= fake_outputs_count)
+            break;
+        }
+      }
+
+      //paste real transaction to the random index
+      auto it_to_insert = std::find_if(src.outputs.begin(), src.outputs.end(), [&](const tx_output_entry& a)
+      {
+        return a.first >= td.m_global_output_index;
+      });
+      //size_t real_index = src.outputs.size() ? (rand() % src.outputs.size() ):0;
+      tx_output_entry real_oe;
+      real_oe.first = td.m_global_output_index;
+      real_oe.second.dest = rct::pk2rct(boost::get<txout_to_key>(td.m_tx.vout[td.m_internal_output_index].target).key);
+      real_oe.second.mask = rct::identity();
+      auto interted_it = src.outputs.insert(it_to_insert, real_oe);
+      src.real_out_tx_key = get_tx_pub_key_from_extra(td.m_tx);
+      src.real_output = interted_it - src.outputs.begin();
+      src.real_output_in_tx_index = td.m_internal_output_index;
+      src.multisig_kLRki = rct::multisig_kLRki({rct::zero(), rct::zero(), rct::zero(), rct::zero()});
+      detail::print_source_entry(src);
+      ++i;
+    }
+
+    cryptonote::tx_destination_entry change_dts = AUTO_VAL_INIT(change_dts);
+    if (needed_money < found_money)
+    {
+      change_dts.addr = get_subaddress({subaddr_account, 0});
+      change_dts.amount = found_money - needed_money;
+    }
+
+    std::vector<cryptonote::tx_destination_entry> splitted_dsts, dust_dsts;
+    uint64_t dust = 0;
+    destination_split_strategy(dsts, change_dts, dust_policy.dust_threshold, splitted_dsts, dust_dsts);
+    for(auto& d: dust_dsts) {
+      THROW_WALLET_EXCEPTION_IF(dust_policy.dust_threshold < d.amount, error::wallet_internal_error, "invalid dust value: dust = " +
+        std::to_string(d.amount) + ", dust_threshold = " + std::to_string(dust_policy.dust_threshold));
+    }
+    for(auto& d: dust_dsts) {
+      if (!dust_policy.add_to_fee)
+        splitted_dsts.push_back(cryptonote::tx_destination_entry(d.amount, dust_policy.addr_for_dust, d.is_subaddress));
+      dust += d.amount;
+    }
+
+    crypto::secret_key tx_key;
+    std::vector<crypto::secret_key> additional_tx_keys;
+    rct::multisig_out msout;
+    bool r = cryptonote::construct_tx_and_get_tx_key(m_account.get_keys(), m_subaddresses, sources, splitted_dsts, change_dts.addr, extra, tx, unlock_time, tx_key, additional_tx_keys, false, false, m_multisig ? &msout : NULL);
+    THROW_WALLET_EXCEPTION_IF(!r, error::tx_not_constructed, sources, splitted_dsts, unlock_time, m_testnet);
+    THROW_WALLET_EXCEPTION_IF(upper_transaction_size_limit <= get_object_blobsize(tx), error::tx_too_big, tx, upper_transaction_size_limit);
+
+    std::string key_images;
+    bool all_are_txin_to_key = std::all_of(tx.vin.begin(), tx.vin.end(), [&](const txin_v& s_e) -> bool
+    {
+      CHECKED_GET_SPECIFIC_VARIANT(s_e, const txin_to_key, in, false);
+      key_images += boost::to_string(in.k_image) + " ";
+      return true;
+    });
+    THROW_WALLET_EXCEPTION_IF(!all_are_txin_to_key, error::unexpected_txin_type, tx);
+
+    bool dust_sent_elsewhere = (dust_policy.addr_for_dust.m_view_public_key != change_dts.addr.m_view_public_key
+                                || dust_policy.addr_for_dust.m_spend_public_key != change_dts.addr.m_spend_public_key);
+
+    if (dust_policy.add_to_fee || dust_sent_elsewhere) change_dts.amount -= dust;
+
+    ptx.key_images = key_images;
+    ptx.fee = (dust_policy.add_to_fee ? fee+dust : fee);
+    ptx.dust = ((dust_policy.add_to_fee || dust_sent_elsewhere) ? dust : 0);
+    ptx.dust_added_to_fee = dust_policy.add_to_fee;
+    ptx.tx = tx;
+    ptx.change_dts = change_dts;
+    ptx.selected_transfers = selected_transfers;
+    ptx.tx_key = tx_key;
+    ptx.additional_tx_keys = additional_tx_keys;
+    ptx.dests = dsts;
+    ptx.construction_data.sources = sources;
+    ptx.construction_data.change_dts = change_dts;
+    ptx.construction_data.splitted_dsts = splitted_dsts;
+    ptx.construction_data.selected_transfers = selected_transfers;
+    ptx.construction_data.extra = tx.extra;
+    ptx.construction_data.unlock_time = unlock_time;
+    ptx.construction_data.use_rct = false;
+    ptx.construction_data.dests = dsts;
+    // record which subaddress indices are being used as inputs
+    ptx.construction_data.subaddr_account = subaddr_account;
+    ptx.construction_data.subaddr_indices.clear();
+    for (size_t idx: selected_transfers)
+      ptx.construction_data.subaddr_indices.insert(m_transfers[idx].m_subaddr_index.minor);
+  }
+
+
 }

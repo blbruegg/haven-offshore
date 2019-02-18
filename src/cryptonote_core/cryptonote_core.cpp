@@ -138,6 +138,11 @@ namespace cryptonote
   , "Set maximum txpool size in bytes."
   , DEFAULT_TXPOOL_MAX_SIZE
   };
+  static const command_line::arg_descriptor<bool> arg_validator_node  = {
+    "validator"
+  , "Set your node as validator"
+  , false
+  };
 
   //-----------------------------------------------------------------------------------------------
   core::core(i_cryptonote_protocol* pprotocol):
@@ -178,6 +183,11 @@ namespace cryptonote
   void core::set_enforce_dns_checkpoints(bool enforce_dns)
   {
     m_blockchain_storage.set_enforce_dns_checkpoints(enforce_dns);
+  }
+  //-----------------------------------------------------------------------------------
+  void core::set_validator_node(bool validator_node)
+  {
+    m_blockchain_storage.set_validator_node(validator_node);
   }
   //-----------------------------------------------------------------------------------------------
   bool core::update_checkpoints()
@@ -242,6 +252,7 @@ namespace cryptonote
     command_line::add_arg(desc, arg_test_dbg_lock_sleep);
     command_line::add_arg(desc, arg_offline);
     command_line::add_arg(desc, arg_max_txpool_size);
+    command_line::add_arg(desc, arg_validator_node);
 
     miner::init_options(desc);
     BlockchainDB::init_options(desc);
@@ -273,6 +284,7 @@ namespace cryptonote
 
 
     set_enforce_dns_checkpoints(command_line::get_arg(vm, arg_dns_checkpoints));
+    set_validator_node(command_line::get_arg(vm, arg_validator_node));
     test_drop_download_height(command_line::get_arg(vm, arg_test_drop_download_height));
     m_fluffy_blocks_enabled = !get_arg(vm, arg_no_fluffy_blocks);
     m_offline = get_arg(vm, arg_offline);
@@ -632,8 +644,13 @@ namespace cryptonote
         tvc.m_verifivation_failed = true;
         return false;
       }
-      for (size_t n = 0; n < tx.rct_signatures.outPk.size(); ++n)
-        rv.outPk[n].dest = rct::pk2rct(boost::get<txout_to_key>(tx.vout[n].target).key);
+      for (size_t n = 0; n < tx.rct_signatures.outPk.size(); ++n) {
+        if (tx.vout[n].target.type() == typeid(txout_to_key)) {
+          rv.outPk[n].dest = rct::pk2rct(boost::get<txout_to_key>(tx.vout[n].target).key);
+        } else {
+          rv.outPk[n].dest = rct::pk2rct(boost::get<txout_offshore>(tx.vout[n].target).key);
+        }
+      }
 
       const bool bulletproof = rv.type == rct::RCTTypeFullBulletproof || rv.type == rct::RCTTypeSimpleBulletproof;
       if (bulletproof)
@@ -936,11 +953,30 @@ namespace cryptonote
   bool core::check_tx_inputs_keyimages_diff(const transaction& tx) const
   {
     std::unordered_set<crypto::key_image> ki;
-    for(const auto& in: tx.vin)
-    {
-      CHECKED_GET_SPECIFIC_VARIANT(in, const txin_to_key, tokey_in, false);
-      if(!ki.insert(tokey_in.k_image).second)
-        return false;
+
+    if (tx.vin[0].type() == typeid(txin_to_key)) {
+      for(const auto& in: tx.vin)
+      {
+        CHECKED_GET_SPECIFIC_VARIANT(in, const txin_to_key, tokey_in, false);
+        if(!ki.insert(tokey_in.k_image).second)
+          return false;
+      }
+    }
+    else if (tx.vin[0].type() == typeid(txin_offshore)) {
+      for(const auto& in: tx.vin)
+      {
+        CHECKED_GET_SPECIFIC_VARIANT(in, const txin_offshore, tokey_in, false);
+        if(!ki.insert(tokey_in.k_image).second)
+          return false;
+      }
+    }
+    else if (tx.vin[0].type() == typeid(txin_onshore)) {
+      for(const auto& in: tx.vin)
+      {
+        CHECKED_GET_SPECIFIC_VARIANT(in, const txin_onshore, tokey_in, false);
+        if(!ki.insert(tokey_in.k_image).second)
+          return false;
+      }
     }
     return true;
   }
@@ -949,12 +985,32 @@ namespace cryptonote
   {
     const uint8_t version = m_blockchain_storage.get_current_hard_fork_version();
 
-    for(const auto& in: tx.vin)
-    {
-      CHECKED_GET_SPECIFIC_VARIANT(in, const txin_to_key, tokey_in, false);
-      for (size_t n = 1; n < tokey_in.key_offsets.size(); ++n)
-        if (tokey_in.key_offsets[n] == 0)
-          return false;
+    if (tx.vin[0].type() == typeid(txin_to_key)) {
+      for(const auto& in: tx.vin)
+      {
+        CHECKED_GET_SPECIFIC_VARIANT(in, const txin_to_key, tokey_in, false);
+        for (size_t n = 1; n < tokey_in.key_offsets.size(); ++n)
+          if (tokey_in.key_offsets[n] == 0)
+            return false;
+      }
+    }
+    else if (tx.vin[0].type() == typeid(txin_offshore)) {
+      for(const auto& in: tx.vin)
+      {
+        CHECKED_GET_SPECIFIC_VARIANT(in, const txin_offshore, tokey_in, false);
+        for (size_t n = 1; n < tokey_in.key_offsets.size(); ++n)
+          if (tokey_in.key_offsets[n] == 0)
+            return false;
+      }
+    }
+    else if (tx.vin[0].type() == typeid(txin_onshore)) {
+      for(const auto& in: tx.vin)
+      {
+        CHECKED_GET_SPECIFIC_VARIANT(in, const txin_onshore, tokey_in, false);
+        for (size_t n = 1; n < tokey_in.key_offsets.size(); ++n)
+          if (tokey_in.key_offsets[n] == 0)
+            return false;
+      }
     }
     return true;
   }
@@ -962,11 +1018,29 @@ namespace cryptonote
   bool core::check_tx_inputs_keyimages_domain(const transaction& tx) const
   {
     std::unordered_set<crypto::key_image> ki;
-    for(const auto& in: tx.vin)
-    {
-      CHECKED_GET_SPECIFIC_VARIANT(in, const txin_to_key, tokey_in, false);
-      if (!(rct::scalarmultKey(rct::ki2rct(tokey_in.k_image), rct::curveOrder()) == rct::identity()))
-        return false;
+    if (tx.vin[0].type() == typeid(txin_to_key)) {
+      for(const auto& in: tx.vin)
+      {
+        CHECKED_GET_SPECIFIC_VARIANT(in, const txin_to_key, tokey_in, false);
+        if (!(rct::scalarmultKey(rct::ki2rct(tokey_in.k_image), rct::curveOrder()) == rct::identity()))
+          return false;
+      }
+    }
+    else if (tx.vin[0].type() == typeid(txin_offshore)) {
+      for(const auto& in: tx.vin)
+      {
+        CHECKED_GET_SPECIFIC_VARIANT(in, const txin_offshore, tokey_in, false);
+        if (!(rct::scalarmultKey(rct::ki2rct(tokey_in.k_image), rct::curveOrder()) == rct::identity()))
+          return false;
+      }
+    }
+    else if (tx.vin[0].type() == typeid(txin_onshore)) {
+      for(const auto& in: tx.vin)
+      {
+        CHECKED_GET_SPECIFIC_VARIANT(in, const txin_onshore, tokey_in, false);
+        if (!(rct::scalarmultKey(rct::ki2rct(tokey_in.k_image), rct::curveOrder()) == rct::identity()))
+          return false;
+      }
     }
     return true;
   }
@@ -1054,9 +1128,19 @@ namespace cryptonote
     return m_blockchain_storage.find_blockchain_supplement(req_start_block, qblock_ids, blocks, total_height, start_height, max_count);
   }
   //-----------------------------------------------------------------------------------------------
+  bool core::get_random_outs_for_amounts(const COMMAND_RPC_GET_RANDOM_OUTPUTS_FOR_AMOUNTS::request& req, COMMAND_RPC_GET_RANDOM_OUTPUTS_FOR_AMOUNTS::response& res) const
+  {
+    return m_blockchain_storage.get_random_outs_for_amounts(req, res);
+  }
+  //-----------------------------------------------------------------------------------------------
   bool core::get_outs(const COMMAND_RPC_GET_OUTPUTS_BIN::request& req, COMMAND_RPC_GET_OUTPUTS_BIN::response& res) const
   {
     return m_blockchain_storage.get_outs(req, res);
+  }
+  //-----------------------------------------------------------------------------------------------
+  bool core::get_random_rct_outs(const COMMAND_RPC_GET_RANDOM_RCT_OUTPUTS::request& req, COMMAND_RPC_GET_RANDOM_RCT_OUTPUTS::response& res) const
+  {
+    return m_blockchain_storage.get_random_rct_outs(req, res);
   }
   //-----------------------------------------------------------------------------------------------
   bool core::get_tx_outputs_gindexs(const crypto::hash& tx_id, std::vector<uint64_t>& indexs) const

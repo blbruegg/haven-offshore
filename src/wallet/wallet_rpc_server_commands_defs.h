@@ -1547,6 +1547,23 @@ namespace wallet_rpc
     };
   };
 
+  struct COMMAND_RPC_GET_USD_PRICE
+  {
+    struct request
+    {
+      BEGIN_KV_SERIALIZE_MAP()
+      END_KV_SERIALIZE_MAP()
+    };
+    struct response
+    {
+      uint64_t price;
+
+      BEGIN_KV_SERIALIZE_MAP()
+        KV_SERIALIZE(price)
+      END_KV_SERIALIZE_MAP()
+    };
+  };
+
   struct COMMAND_RPC_GET_LANGUAGES
   {
     struct request
